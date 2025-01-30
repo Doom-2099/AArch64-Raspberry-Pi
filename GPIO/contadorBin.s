@@ -1,7 +1,7 @@
 /* 
     * File:   ContadorBinario.s
     * Author: Jorge Castañeda
-    * Lista Enlazada Simple
+    * Contador Binario
 */
 
 .section .rodata
