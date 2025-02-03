@@ -178,11 +178,7 @@ main:
         BL insert_routine
 
         LDR x0, =opcion
-        MOV x1, 3
-        clear_option:
-            STRB wzr, [x0]
-            SUB x1, x1, #1
-            CBNZ x1, clear_option
+        STR wzr, [x0]
 
         B main
 
@@ -190,6 +186,9 @@ main:
         B main
 
     print_routine_op:
+        LDR x0, =opcion
+        STR wzr, [x0]
+
         BL print_list
         B main
 
