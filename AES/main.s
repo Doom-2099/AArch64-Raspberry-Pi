@@ -1,194 +1,208 @@
-.section .rodata
-    msg_txt:            .asciz "\nIngrese El Mensaje A Cifrar: "
-    msg_key:            .asciz "\nIngrese La Clave Para El Cifrado: "
-    format_str:         .asciz "%16s"
-    key_err_msg:        .asciz "El Valor Ingresado Para La Llave Es Incorrecto"
+// CADENAS DE TEXTO
+.section .data
+    msg_txt:         .asciz "\nIngrese El Mensaje A Cifrar: " 
+        lenMsgTxt = . - msg_txt
 
+    msg_key:         .asciz "\nIngrese La Clave Para El Cifrado: "
+        lenMsgKey = . - msg_key
+
+    key_err_msg:     .asciz "El Valor Ingresado Para La Llave Es Incorrecto"
+        lenKeyErr = . - key_err_msg
+// -----------------------------------------------------------------------------------------------------------------
+
+// IMPORT DE CONSTANTES
+.include "constants.s"
+// -----------------------------------------------------------------------------------------------------------------
+
+// RESERVACION DE MEMORIA
 .section .bss
     .global matState
-    matState:       .space 16, 0
+    matState:       .space 16, 0         // Matriz de estado del texto en claro de 128 bits
 
     .global key
-    key:            .space 16, 0
+    key:            .space 16, 0         // Matriz de llave inicial de 128 bits
 
     .global criptograma
-    criptograma:    .space 16, 0
+    criptograma:    .space 16, 0         // Buffer para almacenar el resultado de la encriptacion
 
+    buffer:         .space 33, 0         // Buffer utilizado para almacenar la entrada del usuario por consola
 
-    buffer:         .space 17, 0
+    dummy:          .space 8, 0          // Buffer para descartar caracteres extra
+// -----------------------------------------------------------------------------------------------------------------
 
+// IMPORT DE CONSTANTES
+.include "macros.s"
+// -----------------------------------------------------------------------------------------------------------------
+
+// CODIGO FUENTE
 .section .text
 
 /* 
- * Posicionar Cadena En Matriz de Estado
+ * ---------------------------------------
+ * --- Funcion Colocar Bytes En Matriz ---
+ * ---------------------------------------
  */
 .type   convertText, %function
-convertText:    // x1 -> matriz
+.global convertText
+convertText:                                    // Parametros x1: Matriz donde se almacenaran los bytes
     STP x29, x30, [SP, #-16]!
 
-    // Column Major => 4(J) + I
-    LDR x0, =buffer
-
-    MOV x9, #0
-    i_row:
-
-        MOV x10, #0
-        j_col:
-            LDRB w3, [x0], #1
+    LDR x0, =buffer                             // Cargar direccion del buffer para leer los bytes
+    MOV x9, #0                                  // Contador de columnas
+    i_col:
+        MOV x10, #0                             // Contador de filas
+        j_row:
+            LDRB w3, [x0], #1                   // Cargar el bytes desde el buffer
+                                                // Aplicar operacion de Column Major para obtener el index
+            MOV x5, #4                          
+            MUL x5, x5, x10                     // R <- Row Index * 4
+            ADD x5, x5, x9                      // Index <- R + Column
             
-            MOV x5, #4
-            MUL x5, x5, x10
-            ADD x5, x5, x9
-            
-            STRB w3, [x5]
+            STRB w3, [x1, x5]                   // Almacenar el byte del registro 3 en la direccion x1 + x5
 
-            ADD x10, x10, #1
-            CMP x10, #4
-            BNE j_col
+            ADD x10, x10, #1                    // Incrementar el contador de filas
+            CMP x10, #4                         // Si se ha llegado a las 4 filas, terminar ciclo
+            BNE j_row
 
-        ADD x9, x9, #1
-        CMP x9, #4
-        BNE i_row
+        ADD x9, x9, #1                          // Incrementar el contador de columnas
+        CMP x9, #4                              // Si se ha llegado a las 4 columnas, terminar el ciclo
+        BNE i_col
 
     LDP x29, x30, [SP], #16
     RET
     .size convertText, (. - convertText)
 
 /* 
- * Convertir Cadena A Bytes
+ * ----------------------------------------
+ * --- Funcion Convertir Cadena A Bytes ---
+ * ----------------------------------------
  */
 .type   convertKey, %function
+.global convertKey
 convertKey:
     STP x29, x30, [SP, #-16]!
 
-    LDR x0, =buffer
+    LDR x0, =buffer                         // Cargar la direccion del buffer con la llave en texto
+    LDR x4, =buffer                         // Cargar la direccion de inicio del buffer para reemplazar los bytes
+    MOV x3, #0                              // Contador de caracteres procesados
 
-    loop_key:
-        LDRB w1, [x0]
-        CBZ w1, end_convert_key
+    loop_key:                               // Etiqueta del ciclo
+        LDRB w1, [x0], #1                   // Cargar un byte del buffer
+        CBZ w1, end_convert_key             // Si tiene un valor de cero, ya se proceso la cadena y se envia al final
 
-        CMP w1, #48
-        BLS error_key
+        CMP w1, #48                         // Si el caracter es menor a 48 == "0", mostrar un error (x < 48)
+        BLO error_key
 
-        CMP w1, #58
+        CMP w1, #57                         // Si el caracter es menor o igual a 57 == "9", convertir numero (x >= 48 && x <= 57)
         BLS convertNum
 
-        CMP w1, #65
-        BLS error_key
+        CMP w1, #65                         // Si el caracter es menor a 65 == "A", mostrar un error (x > 57 && x < 65)
+        BLO error_key
 
-        CMP w1, #71
+        CMP w1, #70                         // Si el caracter es menor o igual a 70 == "F", convertir hexadecimal (x >= 65 && x <= 70)
         BLS convertHex
 
-        convertNum:
-            SUB w1, w1, #48
-            STRB w1, [x0], #1
-            B loop_key
+        B error_key                         // Cualquier otra condicion, mostrar un error (x > 70)
+
+        convertNum:                         
+            SUB w1, w1, #48                 // Restar 48 == "0", para obtener el valor del digito
+            TBNZ w3, #0, desp_bits          // Si el caracter es impar, hacer ajuste de bits
+            MOV w2, w1                      // Caso contrario, copiar el numero al registro 2
+            ADD w3, w3, #1                  // Aumentar el contador de caracteres
+            B loop_key                      // Continuar con el ciclo
 
         convertHex:
-            SUB w1, w1, #65
-            STRB w1, [x0], #1
-            B loop_key
-    
+            SUB w1, w1, #65                 // Restar 65 == "A", para obtener el valor del digito
+            ADD w1, w1, #10                 // Sumar 10 unidades para cumplir con el rango de hexadecimales
+            TBNZ w3, #0, desp_bits          // Si el caracter es impar, hacer ajuste de bits
+            MOV w2, w1                      // Caso contrario, copiar el numero al registro 2
+            ADD w3, w3, #1                  // Aumentar el contador de caracteres                    // Caso contrario, copiar el numero al registro 2
+            B loop_key                      // Continuar con el ciclo
+
+        desp_bits:
+            LSL w2, w2, #4                  // Desplazar 4 bits a la izquierda 0000 xxxx -> xxxx 0000 
+            ORR w1, w1, w2                  // Realizar operacion OR del numero en registro 1 con registro 2
+                                            // r1 -> 0000 yyyy | r2 -> xxxx 0000 => xxxx yyyy
+            BIC w2, w2, w2                  // Limpiar valor del registro 2
+            STRB w1, [x4], #1               // Almacenar byte dentro del buffer
+            ADD w3, w3, #1                  // Aumentar el contador de caracteres
+            B loop_key                      // Continuar con el ciclo
+            
     error_key:
-        LDR x0, =key_err_msg
-        BL printf 
+        print 1, key_err_msg, lenKeyErr     // Funcion para imprimir en consola
     
     end_convert_key:
+        STRB w1, [x4]                       // Almacenar el byte null para indicar el fin de la llave de bytes
         LDP x29, x30, [SP], #16
         RET
 
     .size convertKey, (. - convertKey)
 
 /* 
- * Funcion Que Da Inicio A La Encriptacion
+ * ----------------------------
+ * --- Funcion Encriptacion ---
+ * ----------------------------
  */
-.type encript, %function
+.type   encript, %function
+.global encript
 encript:
     STP x29, x30, [SP, #-16]!
 
-    
+    MOV x0, #0
 
     LDP x29, x30, [SP], #16
     RET
     .size encript, (. - encript)
 
 /* 
- * Funcion Principal
+ * -------------------------
+ * --- Funcion Principal ---
+ * -------------------------
  */
-.type   main, %function
-.global main
-main:
-    // Imprimir mensaje para pedir texto a cifrar 
-    LDR x0, =msg_txt
-    BL printf
+.type   _start, %function
+.global _start
+_start:
+    print 1, msg_txt, lenMsgTxt // Imprimir mensaje en consola
+    read 0, buffer, #16         // Si no es un salto de linea, continuar con el ciclo
 
-
-    // Lectura Del Los Datos Ingresados Por El Usuario
-    // (Unicamente Tomara 16 caracteres == 16 bytes == 128 bits)
-    LDR x0, =format_str
-    LDR x1, =buffer
-    BL scanf
-
-
-    // En Caso De Que Se Ingresen Mas Caracteres, Se Omitiran
     discard_1:
-        BL getchar
-        CMP x0, #10
-        BNE discard_1
+        read 0, dummy, #1
+        bytesAvailable dummy
+        LDR x2, =dummy
+        LDR x2, [x2]
+        CBNZ x2, discard_1
 
+    print 1, buffer, #16        // Imprimir cadena leida en consola
 
-    // Imprimir La Cadena Ingresada
-    LDR x0, =buffer
-    BL printf
+    LDR x1, =matState           // Cargar direccion de la matriz de estado
+    BL convertText              // Llamar a la funcion encargada de posicionar los bytes en la matriz de estado
 
+    //print 1, matState, #16
+    print 1, msg_key, lenMsgKey     // Imprimir mensaje en consola
+    read 0, buffer, #32             // Funcion para leer desde la consola
 
-    // Posicionar elementos en la matriz en forma column-major
-    LDR x1, =matState
-    BL convertText
-
-
-    // Imprimir mensaje para pedir clavde de 16 caracteres hexadecimales
-    LDR x0, =msg_key
-    BL printf
-
-
-    // Lectura De La Llave Ingresada Por El Usuario
-    // (Unicamente Tomara 16 caracteres == 16 bytes == 128 bits)
-    LDR x0, =format_str
-    LDR x1, =buffer
-    BL scanf
-
-
-    // En Caso De Que Se Ingresen Mas Caracteres, Se Omitiran
     discard_2:
-        BL getchar
-        CMP x0, #10
-        BNE discard_2
+        read 0, dummy, #1
+        bytesAvailable dummy
+        LDR x2, =dummy
+        LDR x2, [x2]
+        CBNZ x2, discard_2
 
+    print 1, buffer, #32        // Imprimir cadena leida en consola
 
-    // Imprimir la key Ingresada
-    LDR x0, =buffer
-    BL printf
+    BL convertKey               // Funcion para convertir la cadena de la llave en bytes hexadecimales
 
+    LDR x1, =key                // Cargar direccion de la matriz de la llave
+    BL convertText              // Llamar a la funcion encargada de posicionar los bytes en la matriz de la llave 
 
-    // Conversion de la cadena "key" a valor numerico
-    BL convertKey
+    //print 1, key, #16
 
+    BL encript                  // Funcion que inicia la encriptacion de los datos
+    print 1, criptograma, #16   // Imprimir criptograma en consola
 
-    // Posicionar elementos en la matriz en forma column-major
-    LDR x1, =key
-    BL convertText
+    MOV x0, #0                  // Finalizar con etado 0 (OK)
+    MOV x8, #93                 // Terminar la ejecucion del programa
+    SVC #0
 
-
-    // Realizar Encriptacion
-    BL encript
-
-
-    // Imprimir Cadena Encriptada
-    LDR x0, =criptograma
-    BL printf
-
-    BL exit
-
-    .size main, (. - main)
+    .size _start, (. - _start)
 
