@@ -20,7 +20,10 @@
     matState:       .space 16, 0         // Matriz de estado del texto en claro de 128 bits
 
     .global key
-    key:            .space 16, 0         // Matriz de llave inicial de 128 bits
+    key:            .space 176, 0         // Matriz de llave inicial de 128 bits
+
+    .global subKey
+    subKey:         .space 176, 0        // Matriz de subllaves para el cifrado AES
 
     .global criptograma
     criptograma:    .space 16, 0         // Buffer para almacenar el resultado de la encriptacion
@@ -30,7 +33,7 @@
     dummy:          .space 8, 0          // Buffer para descartar caracteres extra
 // -----------------------------------------------------------------------------------------------------------------
 
-// IMPORT DE CONSTANTES
+// IMPORT DE MACROS
 .include "macros.s"
 // -----------------------------------------------------------------------------------------------------------------
 
