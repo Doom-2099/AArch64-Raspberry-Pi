@@ -22,9 +22,6 @@
     .global key
     key:            .space 176, 0         // Matriz de llave inicial de 128 bits
 
-    .global subKey
-    subKey:         .space 176, 0        // Matriz de subllaves para el cifrado AES
-
     .global criptograma
     criptograma:    .space 16, 0         // Buffer para almacenar el resultado de la encriptacion
 
