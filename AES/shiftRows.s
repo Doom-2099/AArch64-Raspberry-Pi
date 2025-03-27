@@ -5,9 +5,9 @@
  * ---- Funcion Rotacion De Bytes ----
  * -----------------------------------
  */
-.type shiftRow, %function
-.global shiftRow
-shiftRow:
+.type shiftRows, %function
+.global shiftRows
+shiftRows:
     STP X29, X30, [SP, -16]!
 
     LDR x0, =matState
@@ -27,4 +27,4 @@ shiftRow:
 
     LDP X29, X30, [SP], 16
     RET
-    .size shiftRow, (. - shiftRow)
+    .size shiftRows, (. - shiftRows)

@@ -148,8 +148,45 @@ convertKey:
 encript:
     STP x29, x30, [SP, #-16]!
 
-    MOV x0, #0
+    MOV x0, =matState
+    MOV x1, =key
+    BL addRoundKey
 
+    MOV x20, #9
+    MOV x19, #1
+    loop_rondas:
+        LDR x0, =matState
+        MOV x1, #16
+        BL subBytes
+
+        BL shiftRows
+
+        // BL mixColumns
+
+        LDR x0, =matState
+        LDR x1, =key
+        MOV x2, #16
+        MUL x2, x2, x19
+        ADD x1, x1, x2
+        BL addRoundKey
+
+        ADD x19, x19, #1
+        SUB x20, x20, #1
+        CBNZ x20, loop_rondas
+
+    LDR x0, =matState
+    MOV x1, #16
+    BL subBytes
+
+    BL shiftRows
+
+    LDR x0, =matState
+    LDR x1, =key
+    ADD x1, x2, #160
+    BL addRoundKey
+
+    // print mensaje cifrado
+    
     LDP x29, x30, [SP], #16
     RET
     .size encript, (. - encript)
