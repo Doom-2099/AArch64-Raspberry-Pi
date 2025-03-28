@@ -8,6 +8,10 @@
 
     key_err_msg:     .asciz "El Valor Ingresado Para La Llave Es Incorrecto"
         lenKeyErr = . - key_err_msg
+
+    .global keys_success
+    keys_success:    .asciz "Las Subclaves Se Han Generado Correctamente"
+        lenKeySuccess = . - keys_success
 // -----------------------------------------------------------------------------------------------------------------
 
 // IMPORT DE CONSTANTES
